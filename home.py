@@ -1,136 +1,107 @@
 import streamlit as st
+import requests
 
-# Set page configuration at the very top
-st.set_page_config(layout="wide")
+# Helper function to call the bot API
+def call_bot_api(message):
+    """
+    Call the Flask backend API to get a response from the AI bot.
+    """
+    url = "http://127.0.0.1:5000/bot_chat"  # Replace with the actual backend URL
+    payload = {"message": message}
+    headers = {"Content-Type": "application/json"}
 
-# Initialize session state variables
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'show_learning_page' not in st.session_state:
-    st.session_state.show_learning_page = False
-if 'show_quiz_page' not in st.session_state:
-    st.session_state.show_quiz_page = False
-if 'submitted_text' not in st.session_state:
-    st.session_state.submitted_text = ""
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=50)
+        response.raise_for_status()
+        return response.json().get("response", "No response from bot.")
+    except requests.exceptions.Timeout:
+        return "Error: The request timed out. Please try again later."
+    except requests.exceptions.RequestException as e:
+        return f"Error: {e}"
 
-def main():
-    if st.session_state.show_learning_page:
-        learning_page()
-    elif st.session_state.show_quiz_page:
-        quiz_page()
-    else:
-        home()
+# Function to display the learning page with chat functionality
+def learning_page():
+    st.title("Chat with the Bot")
 
-def home():
-    st.title("Welcome to the Learning Platform")
+    # Initialize session state for chat history
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-    col1, col2 = st.columns(2)
+    # Input form for user message
+    with st.form("chat_form"):
+        user_message = st.text_input("Enter your message:", placeholder="Type your message here")
+        submit_button = st.form_submit_button("Send")
 
-    with col1:
-        if st.button("Start Quiz"):
-            st.session_state.show_quiz_page = True
-            st.experimental_rerun()  # Rerun to switch to the quiz page
+    if submit_button and user_message:
+        # Call the bot API and get the response
+        bot_response = call_bot_api(user_message)
 
-    with col2:
-        if st.button("Start Learning"):
-            st.session_state.show_learning_page = True
-            st.experimental_rerun()  # Rerun to switch to the learning page
+        # Append the user message and bot response to the chat history
+        st.session_state.chat_history.append({"sender": "You", "message": user_message})
+        st.session_state.chat_history.append({"sender": "Bot", "message": bot_response})
 
-def quiz_page():
+    # Display the chat history
+    if st.session_state.chat_history:
+        st.write("### Chat History")
+        for chat in st.session_state.chat_history:
+            st.write(f"**{chat['sender']}:** {chat['message']}")
+
     # Add a "Back to Home" button
     if st.button("Back to Home"):
-        st.session_state.show_quiz_page = False
-        st.experimental_rerun()  # Rerun to go back to the home page
+        st.session_state.page = "home"
+        st.experimental_rerun()
 
-    # Add a heading for the quiz page
-    st.title("Quiz Started")
+# Function to display the quiz page
+def quiz_page():
+    st.title("Quiz Page")
+    st.write("Answer the following questions:")
 
-    # Add placeholder for quiz logic
-    st.write("This is where the quiz will take place. Add your quiz questions here.")
+    # Example Quiz Questions
+    question_1 = st.text_input("Question 1: What is the capital of France?")
+    question_2 = st.text_input("Question 2: What is 2 + 2?")
+    submit_quiz = st.button("Submit Quiz")
 
-def learning_page():
-    # Create a container for the top-right "Back to Home" button
-    st.markdown(
-        """
-        <style>
-        .top-right-button {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    if submit_quiz:
+        # Example validation of answers
+        score = 0
+        if question_1.lower() == "paris":
+            score += 1
+        if question_2 == "4":
+            score += 1
 
-    # Place the "Back to Home" button using custom CSS
-    back_button_container = st.container()
-    with back_button_container:
-        back_to_home = st.button("Back to Home", key="back_to_home")
-        if back_to_home:
-            st.session_state.show_learning_page = False
+        st.write(f"Your score: {score}/2")
+        st.success("Quiz completed! Well done!")
+
+    # Add a "Back to Home" button
+    if st.button("Back to Home"):
+        st.session_state.page = "home"
+        st.experimental_rerun()
+
+# Main app function
+def main():
+    # Session state for navigation
+    if "page" not in st.session_state:
+        st.session_state.page = "home"
+
+    # Navigation
+    if st.session_state.page == "home":
+        st.title("AI-Powered Quiz Assistant")
+        st.write("Welcome to the quiz assistant. Choose an action below.")
+
+        # Buttons for navigation
+        if st.button("Start Learning"):
+            st.session_state.page = "learning"
             st.experimental_rerun()
 
-    # Add vertical space to push the form to the bottom
-    st.markdown("<div style='height: 70vh;'></div>", unsafe_allow_html=True)
+        if st.button("Start Quiz"):
+            st.session_state.page = "quiz"
+            st.experimental_rerun()
 
-    # Display the entered text above the input box if it exists
-    if st.session_state.submitted_text:
-        st.write("**You:**", st.session_state.submitted_text)
-        if st.session_state.submitted_text.lower() == "hi":
-            bot_response = {
-                "generated_content": (
-                    "Hi there! I'm ready to help your students with a quiz. To get started, please tell me:\n\n"
-                    "1. What topic should the quiz cover?\n"
-                    "2. How many questions should the quiz have in total?\n"
-                    "3. How many multiple-choice questions (MCQs) and how many subjective (short answer or essay) questions would you like?\n"
-                    "4. What is the grade level of your students?\n"
-                    "5. What difficulty level are you aiming for (easy, medium, hard)?\n"
-                )
-            }
-            st.write("**Bot:**", bot_response["generated_content"])
-        else:
-            st.write("**Bot:**", "I'm here to assist you!")
+    elif st.session_state.page == "learning":
+        learning_page()
 
-    # Input form for text and submission
-    with st.form("my_form"):
-        # Create a horizontal layout for text input and submit button
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            text_input = st.text_input(
-                label="Enter some text",
-                label_visibility="visible",
-                placeholder="Type here..."
-            )
-        with col2:
-            # Add styling to align the button with the text box
-            st.markdown(
-                """
-                <style>
-                div.stButton > button:first-child {
-                    margin-top: 18px;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            submit_button = st.form_submit_button(label="Submit")
-
-    # Update session state when the form is submitted
-    if submit_button:
-        st.session_state.submitted_text = text_input
-        st.session_state.chat_history.append((text_input, "Bot's response"))
-
-    # Display chat history
-    if st.button("Show Chat History"):
-        display_history()
-
-def display_history():
-    st.header("Chat History")
-    for user_input, bot_response in st.session_state.chat_history:
-        st.write("**You:**", user_input)
-        st.write("**Bot:**", bot_response)
+    elif st.session_state.page == "quiz":
+        quiz_page()
 
 if __name__ == "__main__":
     main()
